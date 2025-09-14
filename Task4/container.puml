@@ -1,0 +1,37 @@
+@startuml
+!include <C4/C4_Container>
+
+title Диаграмма контейнеров C4: Интеграция кол-центров с системой ставок
+
+Person(call_center_manager, "Менеджер кол-центра банка", "Сотрудник колл-центра банка")
+Person(partner_agent, "Агент партнерского кол-центра", "Сотрудник партнерского кол-центра")
+
+System_Boundary(rate_integration, "Система управления ставками") {
+    Container(call_center_service, "Сервис кол-центра", "Java/Spring", "Предоставляет интерфейс для менеджеров колл-центра")
+    
+    Container(deposit_service, "Сервис депозитов", "Java/Spring", "Предоставляет API для получения актуальных ставок")
+    Container(rate_export_service, "Сервис выгрузки ставок", "Java/Spring", "Генерирует и выгружает файлы ставок для партнеров")
+    
+    ContainerDb(deposit_db, "Кэш ставок", "Redis", "Хранит актуальные ставки по депозитам")
+    
+    Container(kafka, "Брокер сообщений", "Apache Kafka", "Обеспечивает асинхронную коммуникацию между сервисами")
+}
+
+System_Ext(partner_sftp, "SFTP-сервер партнера", "Внешний SFTP-сервер партнерского кол-центра")
+System_Ext(partner_system, "Система партнерского кол-центра", "Внешняя система партнерского кол-центра")
+
+' Relationships
+Rel(call_center_manager, call_center_service, "Консультирует клиентов по ставкам", "HTTPS")
+Rel(partner_agent, partner_system, "Консультирует клиентов по ставкам из файла", "Локальный UI")
+
+Rel(call_center_service, deposit_service, "Запрашивает актуальные ставки", "REST/HTTPS")
+
+Rel(deposit_service, deposit_db, "Чтение актуальных ставок", "JDBC")
+Rel(rate_export_service, deposit_db, "Чтение актуальных ставок", "JDBC")
+
+Rel(kafka, rate_export_service, "Доставляет события об обновлении ставок", "Kafka Protocol")
+Rel(rate_export_service, partner_sftp, "Выгружает файлы с ставками", "SFTP/SSH")
+
+Rel(partner_sftp, partner_system, "Предоставляет файлы с ставками", "Файловый обмен")
+
+@enduml
