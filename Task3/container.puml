@@ -1,0 +1,63 @@
+@startuml
+!include <C4/C4_Container>
+
+title Диаграмма контейнеров C4: Система открытия депозитов
+
+Person(anonymous_client, "Новый клиент", "Потенциальный клиент, не прошедший идентификацию в банке")
+Person(identified_client, "Идентифицированный клиент", "Клиент банка с доступом к интернет-банку")
+Person(call_center_manager, "Менеджер кол-центра", "Сотрудник колл-центра, обрабатывающий заявки")
+Person(back_office_worker, "Сотрудник бэк-офиса", "Сотрудник, подтверждающий заявки и открывающий депозиты")
+
+System_Boundary(deposit_system, "Система открытия депозитов") {
+    Container(web_site, "Веб-сайт", "JavaScript, React", "Публичный сайт для новых клиентов")
+    Container(internet_bank, "Интернет-банк", "JavaScript, React", "Клиентский портал для идентифицированных клиентов")
+    Container(api_gateway, "API Gateway", "Kong/Nginx", "Единая точка входа для API-запросов")
+    
+    Container(deposit_service, "Сервис депозитов", "Java/Spring", "Предоставляет информацию о депозитах и ставках")
+    Container(application_service, "Сервис заявок", "Java/Spring", "Управляет заявками на открытие депозитов")
+    Container(call_center_service, "Сервис кол-центра", "Java/Spring", "Предоставляет интерфейс для менеджеров колл-центра")
+    Container(back_office_service, "Сервис бэк-офиса", "Java/Spring", "Предоставляет интерфейс для сотрудников бэк-офиса")
+    Container(notification_service, "Сервис уведомлений", "Java/Spring", "Отправляет SMS-уведомления")
+    
+    ContainerDb(deposit_db, "Кэш ставок", "Redis", "Хранит актуальные ставки по депозитам")
+    ContainerDb(application_db, "База заявок", "MS SQL", "Хранит информацию о заявках на депозиты")
+    
+    Container(kafka, "Брокер сообщений", "Apache Kafka", "Обеспечивает асинхронную коммуникацию между сервисами")
+}
+
+System_Ext(abs, "АБС", "Автоматизированная банковская система")
+System_Ext(sms_gateway, "SMS-шлюз", "Внешний сервис отправки SMS")
+
+' Relationships
+Rel(anonymous_client, web_site, "Просматривает депозиты, оставляет заявки", "HTTPS")
+Rel(identified_client, internet_bank, "Просматривает депозиты, открывает депозиты", "HTTPS")
+Rel(call_center_manager, call_center_service, "Обрабатывает заявки, рассчитывает ставки", "HTTPS")
+Rel(back_office_worker, back_office_service, "Подтверждает заявки, открывает депозиты", "HTTPS")
+
+Rel(web_site, api_gateway, "API-запросы", "REST/HTTPS")
+Rel(internet_bank, api_gateway, "API-запросы", "REST/HTTPS")
+Rel(call_center_service, api_gateway, "API-запросы", "REST/HTTPS")
+Rel(back_office_service, api_gateway, "API-запросы", "REST/HTTPS")
+
+Rel(api_gateway, deposit_service, "Запросы информации о депозитах", "REST/HTTPS")
+Rel(api_gateway, application_service, "Операции с заявками", "REST/HTTPS")
+
+Rel(deposit_service, deposit_db, "Чтение/запись кэшированных ставок", "JDBC")
+Rel(application_service, application_db, "Чтение/запись данных о заявках", "JDBC")
+
+Rel(application_service, kafka, "Публикует события о новых заявках", "Kafka Protocol")
+Rel(kafka, call_center_service, "Доставляет события о новых заявках", "Kafka Protocol")
+Rel(kafka, back_office_service, "Доставляет события о новых заявках", "Kafka Protocol")
+
+Rel(call_center_service, kafka, "Публикует события о расчете ставок", "Kafka Protocol")
+Rel(back_office_service, kafka, "Публикует команды на открытие депозитов", "Kafka Protocol")
+
+Rel(kafka, notification_service, "Доставляет события для уведомлений", "Kafka Protocol")
+Rel(notification_service, sms_gateway, "Отправка SMS", "REST/HTTPS")
+
+Rel(deposit_service, abs, "Запрашивает актуальные ставки (периодически)", "REST/HTTPS")
+Rel(kafka, abs, "Передает команды на открытие депозитов", "Kafka Protocol")
+Rel(abs, kafka, "Публикует события об обновлении ставок", "Kafka Protocol")
+Rel(kafka, deposit_service, "Доставляет события об обновлении ставок", "Kafka Protocol")
+
+@enduml
